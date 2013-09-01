@@ -78,6 +78,7 @@ local function ReadFileHeader(f)
 	assert(length == 6, "Length should be 6, something's bad.")
 	
 	local format = b2byte(f:ReadByte(), f:ReadByte())
+	error(format ~= 2, "Asynchronous tracks are not implemented!")
 	local tracknum = b2byte(f:ReadByte(), f:ReadByte())
 	local deltatick = b2byte(f:ReadByte(), f:ReadByte())
 	return format, tracknum, deltatick
