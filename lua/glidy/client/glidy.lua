@@ -1,3 +1,25 @@
+GLIDY_NOTE_OFF            = 0x80
+GLIDY_NOTE_ON             = 0x90
+GLIDY_KEY_AFTER_TOUCH     = 0xA0
+GLIDY_CONTROL_CHANGE      = 0xB0
+GLIDY_PROGRAM_CHANGE      = 0xC0
+GLIDY_CHANNEL_AFTER_TOUCH = 0xD0
+GLIDY_PITCH_WHEEL_CHANGE  = 0xE0
+
+GLIDY_META_SEQUENCE_NUMBER = 0x00
+GLIDY_META_TEXT            = 0x01
+GLIDY_META_TEXT_COPYRIGHT  = 0x02
+GLIDY_META_TRACK_NAME      = 0x03
+GLIDY_META_INSTRUMENT_NAME = 0x04
+GLIDY_META_LYRIC           = 0x05
+GLIDY_META_MARKER          = 0x06
+GLIDY_META_CUE_POINT       = 0x07
+GLIDY_META_END             = 0x2F
+GLIDY_META_TEMPO           = 0x51
+GLIDY_META_TIME_SIGNATURE  = 0x58
+GLIDY_META_KEY_SIGNATURE   = 0x59
+--GLIDY_META_SEQUENCER_INF   = 0x7F
+
 local function tohex(IN)
 	if IN == 0 then return 0 end
     local B,K,OUT,I,D=16,"0123456789ABCDEF","",0
@@ -20,6 +42,9 @@ end]]
 local function b2byte(fbyte1,fbyte2)
 	return bit.bor( bit.lshift(fbyte1,8) , fbyte2 )
 end
+local function b3byte(fbyte1,fbyte2,fbyte3)
+	return bit.bor( bit.lshift(b2byte(fbyte1,fbyte2),8) , fbyte3 )
+end
 
 
 local MThd = 0x4D546864
@@ -29,12 +54,12 @@ local MTrk = 0x4D54726B
 --Msg( tohex( byte or 0 ) .. " " )
 
 
-local f = file.Find("glidy/*.mid", "DATA")
+--local f = file.Find("glidy/*.mid", "DATA")
 
 local function OpenFile(f)
 	assert(f, "NO FILE, DUMBASS")
 	
-	f = file.Open("glidy/"..f, "r", "DATA")
+	f = file.Open("glidy/"..f, "rb", "DATA")
 	assert(f, "Something went wrong while opening the file.")
 	return f
 end
@@ -58,9 +83,9 @@ local function ReadTracks(f, tracknum)
 	
 	for i=1, tracknum do
 		local id = bit.bswap(f:ReadLong())
-		local length = bit.bswap(f:ReadLong()) or 1
+		local length = bit.bswap(f:ReadLong())
 			
-		print(string.format("Reading track %d with length %d...", i, length))
+		print(string.format("Reading track %d of %d with length %d...", i, tracknum, length))
 			
 		if id == MTrk then
 			print(" -> reading")
@@ -69,7 +94,7 @@ local function ReadTracks(f, tracknum)
 			local track_end = f:Tell() + length
 			
 			while f:Tell() < track_end do
-				print("calculating delay at: "..tohex(f:Tell()))
+				--print("calculating delay at: "..tohex(f:Tell()))
 				local delay = 0
 				local msb 
 				repeat
@@ -81,13 +106,13 @@ local function ReadTracks(f, tracknum)
 				msb = nil	
 				
 				local cbyte = f:ReadByte()
-				print("parsing command byte: "..tohex(cbyte).." and I was at "..tohex(f:Tell()))
+				print("READING "..tohex(cbyte).." AT "..tohex(f:Tell()))
 				
 				if cbyte ~= 0xFF then -- normal event
 					local cmd = bit.band(cbyte, 0xF0)
 					local channel = bit.band(cbyte, 0xF)
 					
-					print("Parsing: ",tohex(cbyte),cmd)
+					--print("Parsing: ",tohex(cbyte),cmd)
 					
 					if cmd == 0x80 then -- note on
 						table.insert(data, {
@@ -140,9 +165,64 @@ local function ReadTracks(f, tracknum)
 					end
 				else -- meta event
 					local cmd = f:ReadByte()
-					local len = f:ReadByte()
-					--table.insert(data, {})
-					f:Skip(len) print"skip"
+					--print("MetaParsing: ",tohex(cmd))
+					if cmd == 0x00 then -- sequence number
+						f:Skip(1)
+						table.insert(data, {
+							meta = true,
+							cmd = cmd,
+							bottom = b2byte(f:ReadByte(),f:ReadByte())
+						})
+					elseif cmd == 0x01 or cmd == 0x02 or cmd == 0x03 or cmd == 0x04
+						or cmd == 0x05 or cmd == 0x06 or cmd == 0x07 or cmd == 0x08 then -- text events
+						local len = f:ReadByte()
+						local str = ""
+						for i=1,len do
+							str = str .. string.char(f:ReadByte())
+						end
+						str = string.sub(str,1,-2)
+						--print(" ** DECODED STRING "..str) 
+						table.insert(data, {
+							meta = true,
+							cmd = cmd,
+							text = str
+						})
+					elseif cmd == 0x2F then -- end of track
+						f:Skip(1)
+						print"-- ended track --"
+						break
+					elseif cmd == 0x51 then -- set tempo
+						f:Skip(1)
+						table.insert(data, {
+							meta = true,
+							cmd = cmd,
+							tempo = b3byte(f:ReadByte(),f:ReadByte(),f:ReadByte())
+						})
+					elseif cmd == 0x58 then -- time signature
+						f:Skip(1)
+						table.insert(data, {
+							meta = true,
+							cmd = cmd,
+							numerator = f:ReadByte(),
+							denominator = f:ReadByte(),
+							tickcount = f:ReadByte(),
+							note32count = f:ReadByte()
+						})
+					elseif cmd == 0x59 then -- key signature
+						f:Skip(1)
+						table.insert(data, {
+							meta = true,
+							cmd = cmd,
+							sharts_flats = f:ReadByte(),
+							major_minor = f:ReadByte()
+						})
+					elseif cmd == 0x7F then -- sequencer specific information
+						local len = f:ReadByte()
+						f:Skip(len)
+					else
+						print("unknown meta event: ",tohex(cmd),"at",tohex(f:Tell()))
+						f:Skip(f:ReadByte())
+					end
 				end
 			end
 			
@@ -153,11 +233,13 @@ local function ReadTracks(f, tracknum)
 			f:Skip(length)
 		end
 	end
+	return tracks
 end
 
-local f = OpenFile(f[1])
+local f = OpenFile("everythings_alright.mid")
 local format, tracknum, deltatick = ReadFileHeader(f)
-ReadTracks(f, tracknum)
+local tracks = ReadTracks(f, tracknum)
+PrintTable(tracks)
 
 
 f:Close()
