@@ -78,7 +78,7 @@ local function ReadFileHeader(f)
 	assert(length == 6, "Length should be 6, something's bad.")
 	
 	local format = b2byte(f:ReadByte(), f:ReadByte())
-	error(format ~= 2, "Asynchronous tracks are not implemented!")
+	assert(format ~= 2, "Asynchronous tracks are not implemented!")
 	local tracknum = b2byte(f:ReadByte(), f:ReadByte())
 	local deltatick = b2byte(f:ReadByte(), f:ReadByte())
 	return format, tracknum, deltatick
@@ -122,6 +122,7 @@ local function ReadTracks(f, tracknum)
 					
 					if cmd == 0x80 then -- note on
 						table.insert(data, {
+							delay = delay,
 							channel = channel,
 							cmd = cmd,
 							note = f:ReadByte(),
@@ -129,6 +130,7 @@ local function ReadTracks(f, tracknum)
 						})
 					elseif cmd == 0x90 then -- note off
 						table.insert(data, {
+							delay = delay,
 							channel = channel,
 							cmd = cmd,
 							note = f:ReadByte(),
@@ -136,6 +138,7 @@ local function ReadTracks(f, tracknum)
 						})
 					elseif cmd == 0xA0 then -- key after-touch
 						table.insert(data, {
+							delay = delay,
 							channel = channel,
 							cmd = cmd,
 							note = f:ReadByte(),
@@ -143,6 +146,7 @@ local function ReadTracks(f, tracknum)
 						})
 					elseif cmd == 0xB0 then -- control change
 						table.insert(data, {
+							delay = delay,
 							channel = channel,
 							cmd = cmd,
 							controller = f:ReadByte(),
@@ -150,6 +154,7 @@ local function ReadTracks(f, tracknum)
 						})
 					elseif cmd == 0xC0 then -- patch change
 						table.insert(data, {
+							delay = delay,
 							channel = channel,
 							cmd = cmd,
 							value = f:ReadByte()
@@ -162,6 +167,7 @@ local function ReadTracks(f, tracknum)
 						})
 					elseif cmd == 0xE0 then -- pitch wheel change
 						table.insert(data, {
+							delay = delay,
 							channel = channel,
 							cmd = cmd,
 							bottom = f:ReadByte(),
@@ -176,6 +182,7 @@ local function ReadTracks(f, tracknum)
 						f:Skip(1)
 						table.insert(data, {
 							meta = true,
+							delay = delay,
 							cmd = cmd,
 							bottom = b2byte(f:ReadByte(),f:ReadByte())
 						})
@@ -190,6 +197,7 @@ local function ReadTracks(f, tracknum)
 						--print(" ** DECODED STRING "..str) 
 						table.insert(data, {
 							meta = true,
+							delay = delay,
 							cmd = cmd,
 							text = str
 						})
@@ -201,6 +209,7 @@ local function ReadTracks(f, tracknum)
 						f:Skip(1)
 						table.insert(data, {
 							meta = true,
+							delay = delay,
 							cmd = cmd,
 							tempo = b3byte(f:ReadByte(),f:ReadByte(),f:ReadByte())
 						})
@@ -208,6 +217,7 @@ local function ReadTracks(f, tracknum)
 						f:Skip(1)
 						table.insert(data, {
 							meta = true,
+							delay = delay,
 							cmd = cmd,
 							numerator = f:ReadByte(),
 							denominator = f:ReadByte(),
@@ -218,6 +228,7 @@ local function ReadTracks(f, tracknum)
 						f:Skip(1)
 						table.insert(data, {
 							meta = true,
+							delay = delay,
 							cmd = cmd,
 							sharts_flats = f:ReadByte(),
 							major_minor = f:ReadByte()
