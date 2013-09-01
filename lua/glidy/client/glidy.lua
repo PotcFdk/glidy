@@ -20,6 +20,23 @@ GLIDY_META_TIME_SIGNATURE  = 0x58
 GLIDY_META_KEY_SIGNATURE   = 0x59
 --GLIDY_META_SEQUENCER_INF   = 0x7F
 
+GLIDY_NOTEMAP_DECODE = {}
+GLIDY_NOTEMAP_ENCODE = {}
+
+-- fill notemaps
+
+local notes = {"C","C#","D","D#","E","F","F#","G","G#","A","A#","B"}
+for i=0,0x7F do
+	local note, n, o
+	n = notes[math.mod(i,12)+1]
+	o = math.floor(i/12)
+	note = n..o
+	GLIDY_NOTEMAP_DECODE[i] = note
+	GLIDY_NOTEMAP_ENCODE[note] = i
+end
+
+-- helpers
+
 local function tohex(IN)
 	if IN == 0 then return 0 end
     local B,K,OUT,I,D=16,"0123456789ABCDEF","",0
@@ -31,14 +48,6 @@ local function tohex(IN)
     return OUT
 end
 
-
--- bit magic
--- go die
-
---[[local function candian4(num)
-	return bit.bor(bit.bor(bit.bor((bit.band((bit.rshift(num,24)),0xff)), (bit.band(bit.lshift(num,8),0xff0000))),bit.band((bit.rshift(num,8)),0xff00)),bit.band(bit.lshift(num,24),0xff000000))
-end]]
-
 local function b2byte(fbyte1,fbyte2)
 	return bit.bor( bit.lshift(fbyte1,8) , fbyte2 )
 end
@@ -46,15 +55,11 @@ local function b3byte(fbyte1,fbyte2,fbyte3)
 	return bit.bor( bit.lshift(b2byte(fbyte1,fbyte2),8) , fbyte3 )
 end
 
+-- parser
 
 local MThd = 0x4D546864
 local MTrk = 0x4D54726B
 
-
---Msg( tohex( byte or 0 ) .. " " )
-
-
---local f = file.Find("glidy/*.mid", "DATA")
 
 local function OpenFile(f)
 	assert(f, "NO FILE, DUMBASS")
@@ -236,10 +241,11 @@ local function ReadTracks(f, tracknum)
 	return tracks
 end
 
+-- test
+
 local f = OpenFile("everythings_alright.mid")
 local format, tracknum, deltatick = ReadFileHeader(f)
 local tracks = ReadTracks(f, tracknum)
-PrintTable(tracks)
-
-
 f:Close()
+
+PrintTable(tracks)
