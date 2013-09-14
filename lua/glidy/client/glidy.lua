@@ -106,6 +106,7 @@ local function ReadTracks(f, tracknum)
 				repeat
 					local td = f:ReadByte()
 					msb = bit.rshift(td, 7)
+					td = bit.band(td, 0x7F)
 					delay = bit.lshift(delay, 8)
 					delay = bit.bor(delay, td)
 				until msb == 0
@@ -260,4 +261,21 @@ local format, tracknum, deltatick = ReadFileHeader(f)
 local tracks = ReadTracks(f, tracknum)
 f:Close()
 
-PrintTable(tracks)
+local track_pos = {}
+local track_lasttick = {}
+local tick = 0
+
+hook.Add("Think", "glidy_tick", function()
+	for track, trd in next, tracks do
+		local event = trd[track_pos[track] or 1]
+		if tick > (track_lasttick[track] or 1) + event.delay then
+			if event.cmd == GLIDY_NOTE_ON then -- play
+				local note = GLIDY_NOTEMAP_DECODE[event.note]
+				print(note)
+			end
+			track_pos[track] = (track_pos[track] or 1) + 1
+			track_lasttick[track] = tick
+		end
+	end
+	tick = tick + 1
+end)
